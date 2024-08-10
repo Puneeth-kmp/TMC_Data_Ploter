@@ -1,9 +1,9 @@
 import streamlit as st
 import io
 import re
-import matplotlib.pyplot as plt
-import numpy as np
+import plotly.graph_objects as go
 from collections import defaultdict
+import plotly.express as px
 
 def extract_data(file):
     data = defaultdict(lambda: defaultdict(list))
@@ -32,6 +32,11 @@ def extract_data(file):
             measurement_match = measurement_pattern.search(line)
             if measurement_match and current_id:
                 key, value = measurement_match.groups()
+                try:
+                    # Convert value to float if possible
+                    value = float(value.replace('A', '').replace('rpm', '').replace('deg', '').replace('Nm', ''))
+                except ValueError:
+                    pass  # Keep the original string if it's not a number
                 data[current_id][key].append(value)
 
     except Exception as e:
@@ -39,17 +44,57 @@ def extract_data(file):
     return data
 
 def plot_data(selected_id, selected_measurements, data):
-    for measurement in selected_measurements:
+    colors = px.colors.qualitative.Plotly  # Use Plotly's qualitative color set
+    color_count = len(colors)
+
+    for index, measurement in enumerate(selected_measurements):
         values = data[selected_id][measurement]
-        fig, ax = plt.subplots()
-        ax.plot(values, marker='o')
-        ax.set_title(f'{selected_id} - {measurement}')
-        ax.set_xlabel('Index')
-        ax.set_ylabel(measurement)
-        st.pyplot(fig)
+        if values:
+            fig = go.Figure()
+
+            # Determine if values are numeric or not
+            is_numeric = all(isinstance(val, (int, float)) for val in values)
+
+            if is_numeric:
+                # Plot data with enhanced styling for numeric values
+                fig.add_trace(go.Scatter(
+                    x=list(range(len(values))), 
+                    y=values, 
+                    mode='lines+markers', 
+                    name=measurement,
+                    line=dict(width=2, color=colors[index % color_count]), 
+                    marker=dict(size=8),
+                    text=[f"{val:.2f}" for val in values], 
+                    textposition='top center'
+                ))
+            else:
+                # Plot data without formatting for non-numeric values
+                fig.add_trace(go.Scatter(
+                    x=list(range(len(values))), 
+                    y=[0]*len(values), 
+                    mode='markers', 
+                    name=measurement,
+                    marker=dict(size=8, color=colors[index % color_count]),
+                    text=values, 
+                    textposition='top center'
+                ))
+
+            fig.update_layout(
+                title=f'{selected_id} - {measurement}',
+                xaxis_title='Index',
+                yaxis_title=measurement,
+                template='plotly_dark',  # Use a dark theme for better aesthetics
+                xaxis=dict(showline=True, showgrid=False),
+                yaxis=dict(showline=True, showgrid=True),
+                margin=dict(l=40, r=40, t=40, b=40),
+                legend=dict(x=0, y=1, traceorder='normal', orientation='h'),
+                width=1000  # Set the width of the plot
+            )
+
+            st.plotly_chart(fig, use_container_width=False, width=1000)
 
 def main():
-    st.title('Unique CAN Bus IDs Extractor and Plotter')
+    st.title('Enhanced CAN Bus Data Plotter')
 
     # Upload the file
     uploaded_file = st.file_uploader("Upload a CAN bus data file", type="txt")
@@ -67,7 +112,7 @@ def main():
             if selected_id:
                 measurements = data[selected_id]
                 measurement_names = [key for key in measurements.keys() if key != 'Data Bytes']
-                
+
                 st.write("Select measurements to plot:")
                 selected_measurements = [key for key in measurement_names if st.checkbox(key, key=key)]
 
