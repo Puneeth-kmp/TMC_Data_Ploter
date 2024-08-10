@@ -1,10 +1,12 @@
 import streamlit as st
+import pandas as pd
+import altair as alt
+from datetime import datetime
+from collections import defaultdict
 import io
 import re
-import plotly.graph_objects as go
-from collections import defaultdict
-import plotly.express as px
 
+# Function to extract data from the uploaded file
 def extract_data(file):
     data = defaultdict(lambda: defaultdict(list))
     try:
@@ -33,74 +35,60 @@ def extract_data(file):
             if measurement_match and current_id:
                 key, value = measurement_match.groups()
                 try:
-                    # Convert value to float if possible
                     value = float(value.replace('A', '').replace('rpm', '').replace('deg', '').replace('Nm', ''))
                 except ValueError:
-                    pass  # Keep the original string if it's not a number
+                    pass
                 data[current_id][key].append(value)
 
     except Exception as e:
         st.error(f"Error reading the file: {e}")
     return data
 
+# Function to plot data using Altair
 def plot_data(selected_id, selected_measurements, data):
-    colors = px.colors.qualitative.Plotly  # Use Plotly's qualitative color set
-    color_count = len(colors)
-    
-    for index, measurement in enumerate(selected_measurements):
+    if not selected_measurements:
+        st.write("No measurements selected for plotting.")
+        return
+
+    # Define a list of colors for different plots
+    color_palette = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f']
+    color_map = {measurement: color_palette[i % len(color_palette)] for i, measurement in enumerate(selected_measurements)}
+
+    charts = []
+    for measurement in selected_measurements:
         values = data[selected_id][measurement]
         if values:
-            fig = go.Figure()
-
-            # Determine if values are numeric or not
-            is_numeric = all(isinstance(val, (int, float)) for val in values)
+            df = pd.DataFrame({
+                'Index': list(range(len(values))),
+                'Value': values,
+                'color': [color_map[measurement]] * len(values)  # Use measurement name for color
+            })
             
-            if is_numeric:
-                # Plot data with enhanced styling for numeric values
-                fig.add_trace(go.Scatter(
-                    x=list(range(len(values))), 
-                    y=values, 
-                    mode='lines+markers', 
-                    name=measurement,
-                    line=dict(width=2, color=colors[index % color_count]), 
-                    marker=dict(size=8),
-                    text=[f"{val:.2f}" for val in values], 
-                    textposition='top center'
-                ))
-            else:
-                # Plot data without formatting for non-numeric values
-                fig.add_trace(go.Scatter(
-                    x=list(range(len(values))), 
-                    y=[0]*len(values), 
-                    mode='markers', 
-                    name=measurement,
-                    marker=dict(size=8, color=colors[index % color_count]),
-                    text=values, 
-                    textposition='top center'
-                ))
+            # Create a line chart for each measurement
+            chart = alt.Chart(df).mark_line(point=True).encode(
+                x='Index:O',
+                y='Value:Q',
+                color=alt.Color('color:N', scale=alt.Scale(domain=list(color_map.values()), range=list(color_map.values()))),
+                tooltip=['Index', 'Value']
+            ).properties(
+                title=f"Plot for {measurement}",
+                width=700,
+                height=400
+            ).interactive()
 
-            fig.update_layout(
-                title=f'{selected_id} - {measurement}',
-                xaxis_title='Index',
-                yaxis_title=measurement,
-                template='plotly_dark',  # Use a dark theme for better aesthetics
-                xaxis=dict(showline=True, showgrid=False),
-                yaxis=dict(showline=True, showgrid=True),
-                margin=dict(l=40, r=40, t=40, b=40),
-                legend=dict(x=0, y=1, traceorder='normal', orientation='h'),
-                width=1000  # Set the width of the plot
-            )
-            
-            st.plotly_chart(fig, use_container_width=False, width=1000)
+            charts.append(chart)
 
+    # Display all charts in a vertical layout
+    st.altair_chart(alt.vconcat(*charts), use_container_width=True)
+
+# Main function to handle the Streamlit app logic
 def main():
-    st.title('Enhanced CAN Bus Data Plotter')
+    st.set_page_config(layout="centered", page_icon="📈", page_title="CAN Bus Data Plotter")
+    st.title("CAN Bus Data Plotter")
 
-    # Upload the file
     uploaded_file = st.file_uploader("Upload a CAN bus data file", type="txt")
 
     if uploaded_file is not None:
-        # Extract data from the file
         data = extract_data(uploaded_file)
 
         if data:
