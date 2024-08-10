@@ -1,7 +1,8 @@
 import streamlit as st
 import io
 import re
-import plotly.graph_objects as go
+import matplotlib.pyplot as plt
+import numpy as np
 from collections import defaultdict
 
 def extract_data(file):
@@ -40,10 +41,12 @@ def extract_data(file):
 def plot_data(selected_id, selected_measurements, data):
     for measurement in selected_measurements:
         values = data[selected_id][measurement]
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=list(range(len(values))), y=values, mode='lines+markers', name=measurement))
-        fig.update_layout(title=f'{selected_id} - {measurement}', xaxis_title='Index', yaxis_title=measurement)
-        st.plotly_chart(fig, use_container_width=True)
+        fig, ax = plt.subplots()
+        ax.plot(values, marker='o')
+        ax.set_title(f'{selected_id} - {measurement}')
+        ax.set_xlabel('Index')
+        ax.set_ylabel(measurement)
+        st.pyplot(fig)
 
 def main():
     st.title('Unique CAN Bus IDs Extractor and Plotter')
