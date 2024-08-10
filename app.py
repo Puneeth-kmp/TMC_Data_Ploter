@@ -1,10 +1,11 @@
 import streamlit as st
 import pandas as pd
-import altair as alt
-from datetime import datetime
+import plotly.express as px
+import plotly.graph_objects as go
 from collections import defaultdict
 import io
 import re
+import numpy as np
 
 # Function to extract data from the uploaded file
 def extract_data(file):
@@ -44,42 +45,88 @@ def extract_data(file):
         st.error(f"Error reading the file: {e}")
     return data
 
-# Function to plot data using Altair
-def plot_data(selected_id, selected_measurements, data):
+# Function to plot data using Plotly Express
+def plot_express(selected_id, selected_measurements, data, chart_type):
     if not selected_measurements:
         st.write("No measurements selected for plotting.")
         return
 
-    # Define a list of colors for different plots
     color_palette = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f']
-    color_map = {measurement: color_palette[i % len(color_palette)] for i, measurement in enumerate(selected_measurements)}
+    measurement_plots = []
 
-    charts = []
-    for measurement in selected_measurements:
+    for i, measurement in enumerate(selected_measurements):
         values = data[selected_id][measurement]
         if values:
             df = pd.DataFrame({
                 'Index': list(range(len(values))),
-                'Value': values,
-                'color': [color_map[measurement]] * len(values)  # Use measurement name for color
+                'Value': values
             })
-            
-            # Create a line chart for each measurement
-            chart = alt.Chart(df).mark_line(point=True).encode(
-                x='Index:O',
-                y='Value:Q',
-                color=alt.Color('color:N', scale=alt.Scale(domain=list(color_map.values()), range=list(color_map.values()))),
-                tooltip=['Index', 'Value']
-            ).properties(
-                title=f"Plot for {measurement}",
-                width=700,
-                height=400
-            ).interactive()
 
-            charts.append(chart)
+            if chart_type == 'Line Chart':
+                fig = px.line(df, x='Index', y='Value', title=f'Line Chart for {measurement}', 
+                              line_shape='linear', color_discrete_sequence=[color_palette[i % len(color_palette)]])
+            elif chart_type == 'Bar Chart':
+                fig = px.bar(df, x='Index', y='Value', title=f'Bar Chart for {measurement}', 
+                             color_discrete_sequence=[color_palette[i % len(color_palette)]])
+            elif chart_type == 'Scatter Plot':
+                fig = px.scatter(df, x='Index', y='Value', title=f'Scatter Plot for {measurement}', 
+                                color_discrete_sequence=[color_palette[i % len(color_palette)]])
+            elif chart_type == 'Area Chart':
+                fig = px.area(df, x='Index', y='Value', title=f'Area Chart for {measurement}', 
+                              color_discrete_sequence=[color_palette[i % len(color_palette)]])
+            elif chart_type == 'Histogram':
+                fig = px.histogram(df, x='Value', title=f'Histogram for {measurement}', 
+                                   color_discrete_sequence=[color_palette[i % len(color_palette)]])
+            elif chart_type == 'Box Plot':
+                fig = px.box(df, y='Value', title=f'Box Plot for {measurement}', 
+                             color_discrete_sequence=[color_palette[i % len(color_palette)]])
+            elif chart_type == 'Heatmap':
+                # For a heatmap, we'll need 2D data. We'll use 'Index' for x and 'Value' for y for demonstration.
+                df['Index'] = df['Index'].astype(str)
+                fig = px.density_heatmap(df, x='Index', y='Value', title=f'Heatmap for {measurement}', 
+                                        color_continuous_scale='Viridis')
+            elif chart_type == 'Pie Chart':
+                df = df.groupby('Value').size().reset_index(name='Count')
+                fig = px.pie(df, values='Count', names='Value', title=f'Pie Chart for {measurement}')
+            elif chart_type == 'Bubble Chart':
+                # Ensure 'Value' used for size is non-negative
+                df['Size'] = np.clip(df['Value'], a_min=0, a_max=None)
+                fig = px.scatter(df, x='Index', y='Value', size='Size', title=f'Bubble Chart for {measurement}', 
+                                color_discrete_sequence=[color_palette[i % len(color_palette)]])
+            elif chart_type == 'Radar Chart':
+                # Radar charts using Plotly Graph Objects
+                fig = go.Figure()
 
-    # Display all charts in a vertical layout
-    st.altair_chart(alt.vconcat(*charts), use_container_width=True)
+                fig.add_trace(go.Scatterpolar(
+                    r=values,
+                    theta=[f"Point {i}" for i in range(len(values))],
+                    fill='toself',
+                    name=measurement
+                ))
+
+                fig.update_layout(
+                    polar=dict(
+                        radialaxis=dict(visible=True)
+                    ),
+                    showlegend=True,
+                    title=f'Radar Chart for {measurement}'
+                )
+
+            else:
+                st.write(f"Unsupported chart type: {chart_type}")
+                return
+
+            # Update layout for interactivity
+            fig.update_layout(width=700, height=400)
+
+            measurement_plots.append(fig)
+
+    if measurement_plots:
+        # Display all charts in a vertical layout
+        for fig in measurement_plots:
+            st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.write("No data available for the selected measurements.")
 
 # Main function to handle the Streamlit app logic
 def main():
@@ -104,8 +151,14 @@ def main():
                 st.write("Select measurements to plot:")
                 selected_measurements = [key for key in measurement_names if st.checkbox(key, key=key)]
 
+                chart_type = st.selectbox("Select chart type", [
+                    'Line Chart', 'Bar Chart', 'Scatter Plot', 'Area Chart',
+                    'Histogram', 'Box Plot', 'Heatmap', 'Pie Chart',
+                    'Bubble Chart', 'Radar Chart'
+                ])
+
                 if selected_measurements:
-                    plot_data(selected_id, selected_measurements, data)
+                    plot_express(selected_id, selected_measurements, data, chart_type)
                 else:
                     st.write("Select measurements to plot.")
         else:
