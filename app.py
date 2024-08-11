@@ -1,8 +1,7 @@
 import io
 import re
+import matplotlib.pyplot as plt
 from collections import defaultdict
-import plotly.graph_objects as go
-import plotly.express as px
 import streamlit as st
 
 def extract_data(file):
@@ -44,54 +43,33 @@ def extract_data(file):
     return data
 
 def plot_data(selected_id, selected_measurements, data):
-    colors = px.colors.qualitative.Plotly  # Use Plotly's qualitative color set
-    color_count = len(colors)
-
     for index, measurement in enumerate(selected_measurements):
         values = data[selected_id][measurement]
         if values:
-            fig = go.Figure()
+            plt.figure(figsize=(10, 6))
 
             # Determine if values are numeric or not
             is_numeric = all(isinstance(val, (int, float)) for val in values)
 
             if is_numeric:
-                # Plot data with enhanced styling for numeric values
-                fig.add_trace(go.Scatter(
-                    x=list(range(len(values))), 
-                    y=values, 
-                    mode='lines+markers', 
-                    name=measurement,
-                    line=dict(width=2, color=colors[index % color_count]), 
-                    marker=dict(size=8),
-                    text=[f"{val:.2f}" for val in values], 
-                    textposition='top center'
-                ))
+                plt.plot(values, marker='o', linestyle='-', label=measurement)
+                plt.xlabel('Index')
+                plt.ylabel(measurement)
+                plt.title(f'{selected_id} - {measurement}')
+                plt.grid(True)
+                plt.legend()
             else:
-                # Plot data without formatting for non-numeric values
-                fig.add_trace(go.Scatter(
-                    x=list(range(len(values))), 
-                    y=[0]*len(values), 
-                    mode='markers', 
-                    name=measurement,
-                    marker=dict(size=8, color=colors[index % color_count]),
-                    text=values, 
-                    textposition='top center'
-                ))
+                plt.scatter(range(len(values)), [0]*len(values), c='blue', label=measurement)
+                plt.xlabel('Index')
+                plt.ylabel('No Value')
+                plt.title(f'{selected_id} - {measurement}')
+                plt.grid(True)
+                plt.legend()
+                for i, txt in enumerate(values):
+                    plt.annotate(txt, (i, 0))
 
-            fig.update_layout(
-                title=f'{selected_id} - {measurement}',
-                xaxis_title='Index',
-                yaxis_title=measurement,
-                template='plotly_dark',  # Use a dark theme for better aesthetics
-                xaxis=dict(showline=True, showgrid=False),
-                yaxis=dict(showline=True, showgrid=True),
-                margin=dict(l=40, r=40, t=40, b=40),
-                legend=dict(x=0, y=1, traceorder='normal', orientation='h'),
-                width=1000  # Set the width of the plot
-            )
-
-            st.plotly_chart(fig, use_container_width=False, width=1000)
+            st.pyplot(plt)  # Render the plot with Streamlit
+            plt.close()
 
 def main():
     st.title('Enhanced CAN Bus Data Plotter')
