@@ -1,8 +1,8 @@
 import io
 import re
-import matplotlib.pyplot as plt
-from collections import defaultdict
 import streamlit as st
+import turtle
+import tempfile
 
 def extract_data(file):
     data = defaultdict(lambda: defaultdict(list))
@@ -46,30 +46,36 @@ def plot_data(selected_id, selected_measurements, data):
     for index, measurement in enumerate(selected_measurements):
         values = data[selected_id][measurement]
         if values:
-            plt.figure(figsize=(10, 6))
+            # Create a temporary file for saving the turtle graphics
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.gif') as temp_file:
+                file_path = temp_file.name
 
-            # Determine if values are numeric or not
-            is_numeric = all(isinstance(val, (int, float)) for val in values)
+                # Setup turtle graphics
+                turtle_screen = turtle.Screen()
+                turtle_screen.setup(width=800, height=600)
+                turtle_screen.title(f'{selected_id} - {measurement}')
 
-            if is_numeric:
-                plt.plot(values, marker='o', linestyle='-', label=measurement)
-                plt.xlabel('Index')
-                plt.ylabel(measurement)
-                plt.title(f'{selected_id} - {measurement}')
-                plt.grid(True)
-                plt.legend()
-            else:
-                plt.scatter(range(len(values)), [0]*len(values), c='blue', label=measurement)
-                plt.xlabel('Index')
-                plt.ylabel('No Value')
-                plt.title(f'{selected_id} - {measurement}')
-                plt.grid(True)
-                plt.legend()
-                for i, txt in enumerate(values):
-                    plt.annotate(txt, (i, 0))
+                turtle_pen = turtle.Turtle()
+                turtle_pen.speed(0)
+                turtle_pen.hideturtle()
 
-            st.pyplot(plt)  # Render the plot with Streamlit
-            plt.close()
+                turtle_pen.penup()
+                turtle_pen.goto(-300, 0)
+                turtle_pen.pendown()
+
+                # Draw the plot
+                for i, value in enumerate(values):
+                    turtle_pen.goto(-300 + (i * 10), value)
+
+                turtle_screen.update()
+
+                # Save the drawing
+                turtle_screen.getcanvas().postscript(file=file_path)
+                turtle_screen.bye()
+
+                # Show the image
+                with open(file_path, 'rb') as img_file:
+                    st.image(img_file.read(), caption=f'{selected_id} - {measurement}', use_column_width=True)
 
 def main():
     st.title('Enhanced CAN Bus Data Plotter')
