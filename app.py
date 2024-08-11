@@ -1,9 +1,9 @@
-import streamlit as st
 import io
 import re
-import plotly.graph_objects as go
 from collections import defaultdict
+import plotly.graph_objects as go
 import plotly.express as px
+import streamlit as st
 
 def extract_data(file):
     data = defaultdict(lambda: defaultdict(list))
